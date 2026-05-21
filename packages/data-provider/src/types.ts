@@ -124,6 +124,8 @@ export type TPayload = Partial<TMessage> &
      * before the LLM turn runs.
      */
     manualSkills?: string[];
+    /** Contact IDs referenced via # mention for this turn. */
+    contactIds?: string[];
   };
 
 export type TEditedContent =
@@ -155,6 +157,8 @@ export type TSubmission = {
   addedConvo?: TConversation;
   /** Skills the user invoked via the `$` popover for this submission. */
   manualSkills?: string[];
+  /** Contacts referenced via `#` mention for this submission. */
+  contactIds?: string[];
 };
 
 export type EventSubmission = Omit<TSubmission, 'initialResponse'> & { initialResponse: TMessage };

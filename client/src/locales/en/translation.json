@@ -1745,5 +1745,19 @@
   "com_ui_contacts_import_started": "Import started",
   "com_ui_contacts_import_complete": "Import complete",
   "com_ui_contacts_import_failed": "Import failed",
-  "com_ui_contacts_no_disk_space": "Insufficient disk space for upload"
+  "com_ui_contacts_no_disk_space": "Insufficient disk space for upload",
+  "com_ui_contacts_metadata": "Custom attributes",
+  "com_ui_contacts_mention_search": "Search contacts to mention...",
+  "com_ui_contacts_remove_mention": "Remove contact mention",
+  "com_ui_contacts_confirm_delete": "Delete contact?",
+  "com_ui_contacts_update": "Update Contact",
+  "com_ui_contacts_load_more": "Load more",
+  "com_ui_contacts_processing_import": "Processing import in background...",
+  "com_ui_contacts_import_progress": "Uploading CSV: {{progress}}",
+  "com_ui_contacts_failed_load": "Failed to load contacts",
+  "com_ui_contacts_failed_save": "Failed to save contact",
+  "com_ui_contacts_failed_delete": "Failed to delete contact",
+  "com_ui_contacts_name_required": "Name is required",
+  "com_ui_contacts_import_success": "Import complete: {{count}} contacts imported",
+  "com_ui_contacts_mention_hint": "Type # to mention a contact"
 }

@@ -38,6 +38,7 @@ async function bulkCreateContacts(userId, contactsData, importBatchId, tenantId,
   return {
     inserted: result.length,
     failed: docs.length - result.length,
+    insertedDocs: result,
   };
 }
 

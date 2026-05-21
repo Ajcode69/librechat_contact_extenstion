@@ -9,6 +9,7 @@ const checkDiskSpace = checkDiskSpaceModule.default || checkDiskSpaceModule;
 const db = require('~/models');
 const { requireJwtAuth, configMiddleware } = require('~/server/middleware');
 const { contactImportQueue } = require('../services/workers/contactImportWorker');
+const { embedAndStoreContacts, searchContactsHybrid } = require('../services/Contacts/service');
 const logger = require('~/config/winston');
 
 const router = express.Router();
@@ -108,7 +109,7 @@ router.get('/', configMiddleware, async (req, res) => {
 router.post('/search', async (req, res) => {
   try {
     const { query, limit, field } = req.body;
-    const contacts = await db.searchContacts(req.user.id, query || '', {
+    const contacts = await searchContactsHybrid(req.user.id, query || '', {
       limit: limit ? parseInt(limit, 10) : 15,
       field,
     });
@@ -158,6 +159,19 @@ router.post('/', async (req, res) => {
       tenantId: req.user.tenantId,
     });
 
+    await embedAndStoreContacts([
+      {
+        _id: contact._id,
+        name: contact.name,
+        company: contact.company,
+        role: contact.role,
+        email: contact.email,
+        notes: contact.notes,
+        tags: contact.tags,
+        metadata: contact.metadata,
+      },
+    ]);
+
     res.status(201).json(contact);
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -174,6 +188,20 @@ router.put('/:id', async (req, res) => {
     if (!contact) {
       return res.status(404).json({ error: 'Contact not found' });
     }
+
+    await embedAndStoreContacts([
+      {
+        _id: contact._id,
+        name: contact.name,
+        company: contact.company,
+        role: contact.role,
+        email: contact.email,
+        notes: contact.notes,
+        tags: contact.tags,
+        metadata: contact.metadata,
+      },
+    ]);
+
     res.json(contact);
   } catch (error) {
     res.status(500).json({ error: error.message });

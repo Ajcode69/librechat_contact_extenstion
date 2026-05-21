@@ -17,35 +17,14 @@ import {
   CheckCircle,
   AlertCircle,
 } from 'lucide-react';
-import { dataService } from 'librechat-data-provider';
-
-/* ------------------------------------------------------------------ */
-/*  Types (mirrored from data-provider)                                */
-/* ------------------------------------------------------------------ */
-
-type TContact = {
-  _id: string;
-  user: string;
-  name: string;
-  company?: string;
-  role?: string;
-  email?: string;
-  notes?: string;
-  tags?: string[];
-  metadata?: Record<string, string>;
-  createdAt: string;
-  updatedAt: string;
-};
+import { dataService, type TContact } from 'librechat-data-provider';
+import { useLocalize } from '~/hooks';
 
 type TContactListResponse = {
   contacts: TContact[];
   nextCursor: string | null;
-  hasNextPage: boolean;
+  hasNextPage?: boolean;
 };
-
-/* ------------------------------------------------------------------ */
-/*  Types                                                              */
-/* ------------------------------------------------------------------ */
 
 type ViewMode = 'list' | 'detail' | 'form';
 
@@ -72,6 +51,7 @@ const emptyForm: ContactFormData = {
 /* ------------------------------------------------------------------ */
 
 const ContactsPanel = memo(function ContactsPanel() {
+  const localize = useLocalize();
   /* state */
   const [contacts, setContacts] = useState<TContact[]>([]);
   const [loading, setLoading] = useState(false);
@@ -114,12 +94,12 @@ const ContactsPanel = memo(function ContactsPanel() {
         }
         setNextCursor(res.nextCursor);
       } catch {
-        showToast('Failed to load contacts', 'err');
+        showToast(localize('com_ui_contacts_failed_load'), 'err');
       } finally {
         setLoading(false);
       }
     },
-    [showToast],
+    [showToast, localize],
   );
 
   useEffect(() => {
@@ -145,7 +125,7 @@ const ContactsPanel = memo(function ContactsPanel() {
 
   const handleSave = useCallback(async () => {
     if (!formData.name.trim()) {
-      showToast('Name is required', 'err');
+      showToast(localize('com_ui_contacts_name_required'), 'err');
       return;
     }
     setSaving(true);
@@ -168,34 +148,37 @@ const ContactsPanel = memo(function ContactsPanel() {
       } else {
         await dataService.createContact(payload);
       }
-      showToast(editId ? 'Contact updated' : 'Contact saved');
+      showToast(localize('com_ui_contacts_saved'));
       setView('list');
       setEditId(null);
       setFormData(emptyForm);
       fetchContacts(undefined, searchQuery);
     } catch {
-      showToast('Failed to save contact', 'err');
+      showToast(localize('com_ui_contacts_failed_save'), 'err');
     } finally {
       setSaving(false);
     }
-  }, [formData, editId, fetchContacts, searchQuery, showToast]);
+  }, [formData, editId, fetchContacts, searchQuery, showToast, localize]);
 
   const handleDelete = useCallback(
     async (id: string) => {
+      if (!window.confirm(localize('com_ui_contacts_delete_confirm'))) {
+        return;
+      }
       setDeleting(true);
       try {
         await dataService.deleteContact(id);
-        showToast('Contact deleted');
+        showToast(localize('com_ui_contacts_deleted'));
         setView('list');
         setSelected(null);
         fetchContacts(undefined, searchQuery);
       } catch {
-        showToast('Failed to delete', 'err');
+        showToast(localize('com_ui_contacts_failed_delete'), 'err');
       } finally {
         setDeleting(false);
       }
     },
-    [fetchContacts, searchQuery, showToast],
+    [fetchContacts, searchQuery, showToast, localize],
   );
 
   /* ---- CSV import ---- */
@@ -204,7 +187,7 @@ const ContactsPanel = memo(function ContactsPanel() {
     try {
       const diskRes = await dataService.checkContactDiskSpace();
       if (!diskRes.canAcceptUpload) {
-        showToast('Insufficient disk space for upload', 'err');
+        showToast(localize('com_ui_contacts_no_disk_space'), 'err');
         return;
       }
       fileInputRef.current?.click();
@@ -234,7 +217,7 @@ const ContactsPanel = memo(function ContactsPanel() {
           }
         });
         setImportStatus('processing');
-        showToast('Import started — processing in background');
+        showToast(localize('com_ui_contacts_import_started'));
 
         /* Poll job status */
         const jobId = res.jobId;
@@ -244,12 +227,17 @@ const ContactsPanel = memo(function ContactsPanel() {
             if (status.status === 'completed') {
               clearInterval(poll);
               setImportStatus(null);
-              showToast(`Import complete: ${status.processedRows} contacts imported`);
+              showToast(
+                localize('com_ui_contacts_import_success', { count: String(status.processedRows) }),
+              );
               fetchContacts(undefined, searchQuery);
             } else if (status.status === 'failed') {
               clearInterval(poll);
               setImportStatus(null);
-              showToast(`Import failed: ${status.errors?.[0]?.message || 'Unknown error'}`, 'err');
+              showToast(
+                `${localize('com_ui_contacts_import_failed')}: ${status.errors?.[0]?.message || 'Unknown error'}`,
+                'err',
+              );
             }
           } catch {
             clearInterval(poll);
@@ -265,7 +253,7 @@ const ContactsPanel = memo(function ContactsPanel() {
         fileInputRef.current.value = '';
       }
     },
-    [fetchContacts, searchQuery, showToast],
+    [fetchContacts, searchQuery, showToast, localize],
   );
 
   /* ---- navigate to form ---- */
@@ -348,10 +336,10 @@ const ContactsPanel = memo(function ContactsPanel() {
         </div>
         <div className="flex-1 space-y-4 overflow-y-auto px-4 py-4">
           {[
-            { icon: Building2, label: 'Company', value: selected.company },
-            { icon: Briefcase, label: 'Role', value: selected.role },
-            { icon: Mail, label: 'Email', value: selected.email },
-            { icon: StickyNote, label: 'Notes', value: selected.notes },
+            { icon: Building2, label: localize('com_ui_contacts_company'), value: selected.company },
+            { icon: Briefcase, label: localize('com_ui_contacts_role'), value: selected.role },
+            { icon: Mail, label: localize('com_ui_contacts_email'), value: selected.email },
+            { icon: StickyNote, label: localize('com_ui_contacts_notes'), value: selected.notes },
           ].map(
             (item) =>
               item.value && (
@@ -368,7 +356,7 @@ const ContactsPanel = memo(function ContactsPanel() {
             <div className="flex items-start gap-3">
               <Tag className="mt-0.5 h-4 w-4 flex-shrink-0 text-text-tertiary" />
               <div>
-                <div className="text-xs text-text-tertiary">Tags</div>
+                <div className="text-xs text-text-tertiary">{localize('com_ui_contacts_tags')}</div>
                 <div className="flex flex-wrap gap-1">
                   {selected.tags.map((tag) => (
                     <span
@@ -377,6 +365,22 @@ const ContactsPanel = memo(function ContactsPanel() {
                     >
                       {tag}
                     </span>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+          {selected.metadata && Object.keys(selected.metadata).length > 0 && (
+            <div className="flex items-start gap-3">
+              <Tag className="mt-0.5 h-4 w-4 flex-shrink-0 text-text-tertiary" />
+              <div className="min-w-0 flex-1">
+                <div className="text-xs text-text-tertiary">{localize('com_ui_contacts_metadata')}</div>
+                <div className="mt-1 space-y-1">
+                  {Object.entries(selected.metadata).map(([key, value]) => (
+                    <div key={key} className="text-sm text-text-primary">
+                      <span className="text-text-tertiary">{key}: </span>
+                      {String(value)}
+                    </div>
                   ))}
                 </div>
               </div>
@@ -397,17 +401,17 @@ const ContactsPanel = memo(function ContactsPanel() {
             <ChevronLeft className="h-5 w-5 text-text-secondary" />
           </button>
           <h2 className="text-base font-semibold text-text-primary">
-            {editId ? 'Edit Contact' : 'Add Contact'}
+            {editId ? localize('com_ui_contacts_update') : localize('com_ui_contacts_add')}
           </h2>
         </div>
         <div className="flex-1 space-y-3 overflow-y-auto px-4 py-4">
           {(
             [
-              { key: 'name', label: 'Name', icon: User, required: true },
-              { key: 'company', label: 'Company', icon: Building2 },
-              { key: 'role', label: 'Role', icon: Briefcase },
-              { key: 'email', label: 'Email', icon: Mail },
-              { key: 'tags', label: 'Tags (comma-separated)', icon: Tag },
+              { key: 'name', label: localize('com_ui_contacts_name'), icon: User, required: true },
+              { key: 'company', label: localize('com_ui_contacts_company'), icon: Building2 },
+              { key: 'role', label: localize('com_ui_contacts_role'), icon: Briefcase },
+              { key: 'email', label: localize('com_ui_contacts_email'), icon: Mail },
+              { key: 'tags', label: `${localize('com_ui_contacts_tags')} (comma-separated)`, icon: Tag },
             ] as const
           ).map((field) => (
             <div key={field.key} className="flex items-center gap-2">
@@ -424,7 +428,7 @@ const ContactsPanel = memo(function ContactsPanel() {
           <div className="flex items-start gap-2">
             <StickyNote className="mt-2 h-4 w-4 flex-shrink-0 text-text-tertiary" />
             <textarea
-              placeholder="Notes"
+              placeholder={localize('com_ui_contacts_notes')}
               value={formData.notes}
               rows={3}
               onChange={(e) => setFormData((f) => ({ ...f, notes: e.target.value }))}
@@ -439,7 +443,7 @@ const ContactsPanel = memo(function ContactsPanel() {
             className="flex w-full items-center justify-center gap-2 rounded-lg bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700 disabled:opacity-50"
           >
             {saving && <Loader2 className="h-4 w-4 animate-spin" />}
-            {editId ? 'Update Contact' : 'Save Contact'}
+            {editId ? localize('com_ui_contacts_update') : localize('com_ui_contacts_save')}
           </button>
         </div>
       </div>
@@ -452,11 +456,11 @@ const ContactsPanel = memo(function ContactsPanel() {
       {toastEl}
       {/* Header */}
       <div className="flex items-center justify-between border-b border-border-light px-4 py-3">
-        <h2 className="text-base font-semibold text-text-primary">Contacts</h2>
+        <h2 className="text-base font-semibold text-text-primary">{localize('com_ui_contacts')}</h2>
         <div className="flex items-center gap-1">
           <button
             onClick={openCreate}
-            title="Add Contact"
+            title={localize('com_ui_contacts_add')}
             className="rounded-lg p-1.5 hover:bg-surface-hover"
           >
             <Plus className="h-5 w-5 text-text-secondary" />
@@ -464,7 +468,7 @@ const ContactsPanel = memo(function ContactsPanel() {
           <button
             onClick={handleImport}
             disabled={!!importStatus}
-            title="Import CSV"
+            title={localize('com_ui_contacts_import')}
             className="rounded-lg p-1.5 hover:bg-surface-hover disabled:opacity-50"
           >
             {importStatus ? (
@@ -491,7 +495,7 @@ const ContactsPanel = memo(function ContactsPanel() {
             type="text"
             value={searchQuery}
             onChange={(e) => handleSearchChange(e.target.value)}
-            placeholder="Search contacts..."
+            placeholder={localize('com_ui_contacts_search')}
             className="w-full bg-transparent text-sm text-text-primary placeholder-text-tertiary focus:outline-none"
           />
           {searchQuery && (
@@ -511,7 +515,9 @@ const ContactsPanel = memo(function ContactsPanel() {
       {importStatus && (
         <div className="mx-3 flex items-center gap-2 rounded-md bg-blue-500/10 px-3 py-2 text-xs text-blue-400">
           <Loader2 className="h-3 w-3 animate-spin" />
-          {importStatus === 'processing' ? 'Processing import in background...' : importStatus}
+          {importStatus === 'processing'
+            ? localize('com_ui_contacts_processing_import')
+            : importStatus}
         </div>
       )}
 
@@ -523,7 +529,7 @@ const ContactsPanel = memo(function ContactsPanel() {
           </div>
         ) : contacts.length === 0 ? (
           <div className="px-4 py-10 text-center text-sm text-text-tertiary">
-            No contacts yet. Add your first contact or import a CSV.
+            {localize('com_ui_contacts_empty')}
           </div>
         ) : (
           <>
@@ -550,7 +556,7 @@ const ContactsPanel = memo(function ContactsPanel() {
                 disabled={loading}
                 className="flex w-full items-center justify-center gap-2 py-3 text-xs text-text-secondary hover:text-text-primary"
               >
-                {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Load more'}
+                {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : localize('com_ui_contacts_load_more')}
               </button>
             )}
           </>

@@ -41,6 +41,8 @@ export * from './agents';
 export * from './prompts';
 /* Skills */
 export * from './skills';
+/* Contacts */
+export * from './contacts';
 /* Endpoints */
 export * from './endpoints';
 /* Files */

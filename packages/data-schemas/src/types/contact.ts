@@ -9,6 +9,8 @@ export interface IContact extends Document {
   notes?: string;
   tags?: string[];
   metadata?: Map<string, any>;
+  searchText?: string;
+  embedding?: number[];
   importBatch?: string;
   deletedAt?: Date | null;
   tenantId?: string;
@@ -26,6 +28,8 @@ export interface IContactLean {
   notes?: string;
   tags?: string[];
   metadata?: Record<string, any>;
+  searchText?: string;
+  embedding?: number[];
   importBatch?: string;
   deletedAt?: Date | null;
   tenantId?: string;

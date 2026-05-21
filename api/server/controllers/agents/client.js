@@ -36,7 +36,9 @@ const {
   buildAgentScopedContext,
   buildSkillPrimeContentParts,
   buildInitialToolSessions,
+  extractContactIds,
 } = require('@librechat/api');
+const { buildReferencedContactsContext } = require('~/server/services/Contacts/service');
 const {
   Callback,
   Providers,
@@ -398,6 +400,15 @@ class AgentClient extends BaseClient {
       this.augmentedPrompt = await this.contextHandlers.createContext();
       if (this.augmentedPrompt) {
         sharedRunContextParts.push(this.augmentedPrompt);
+      }
+    }
+
+    /** Referenced contacts from # mention in chat */
+    const contactIds = extractContactIds(this.options.req.body);
+    if (contactIds?.length) {
+      const contactContext = await buildReferencedContactsContext(this.options.req.user.id, contactIds);
+      if (contactContext) {
+        sharedRunContextParts.push(contactContext);
       }
     }
 

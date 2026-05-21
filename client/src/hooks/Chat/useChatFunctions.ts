@@ -100,6 +100,22 @@ export default function useChatFunctions({
     [],
   );
 
+  const drainPendingContactMentions = useRecoilCallback(
+    ({ snapshot, reset }) =>
+      (convoId: string): string[] => {
+        const loadable = snapshot.getLoadable(store.pendingContactMentionsByConvoId(convoId));
+        const contacts =
+          loadable.state === 'hasValue'
+            ? (loadable.contents as Array<{ id: string; name: string }>)
+            : [];
+        if (contacts.length > 0) {
+          reset(store.pendingContactMentionsByConvoId(convoId));
+        }
+        return contacts.map((contact) => contact.id);
+      },
+    [],
+  );
+
   const ask: TAskFunction = (
     {
       text,
@@ -118,6 +134,7 @@ export default function useChatFunctions({
       overrideMessages,
       overrideFiles,
       overrideManualSkills,
+      overrideContactIds,
       addedConvo,
     } = {},
   ) => {
@@ -166,6 +183,13 @@ export default function useChatFunctions({
         : isRegenerate || isContinued || isEdited
           ? []
           : drainPendingManualSkills(conversationId ?? Constants.NEW_CONVO);
+
+    const contactIds =
+      overrideContactIds != null
+        ? overrideContactIds
+        : isRegenerate || isContinued || isEdited
+          ? []
+          : drainPendingContactMentions(conversationId ?? Constants.NEW_CONVO);
     const isEditOrContinue = isEdited || isContinued;
 
     let currentMessages: TMessage[] | null = overrideMessages ?? getMessages() ?? [];
@@ -264,6 +288,7 @@ export default function useChatFunctions({
        * skill resolution reads the top-level `manualSkills` payload field.
        */
       manualSkills: manualSkills.length > 0 ? manualSkills : undefined,
+      contactIds: contactIds.length > 0 ? contactIds : undefined,
     };
 
     const submissionFiles = overrideFiles ?? targetParentMessage?.files;
@@ -320,6 +345,7 @@ export default function useChatFunctions({
        * server-backed `responseMessage` replacement takes over.
        */
       manualSkills: manualSkills.length > 0 ? manualSkills : undefined,
+      contactIds: contactIds.length > 0 ? contactIds : undefined,
     };
 
     if (isAssistantsEndpoint(endpoint)) {
@@ -392,6 +418,7 @@ export default function useChatFunctions({
       editedContent,
       addedConvo,
       manualSkills: manualSkills.length > 0 ? manualSkills : undefined,
+      contactIds: contactIds.length > 0 ? contactIds : undefined,
     };
 
     if (isRegenerate) {

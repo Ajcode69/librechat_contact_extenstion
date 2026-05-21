@@ -75,11 +75,13 @@ const useHandleKeyUp = ({
   const setShowPlusPopover = useSetRecoilState(store.showPlusPopoverFamily(index));
   const setShowPromptsPopover = useSetRecoilState(store.showPromptsPopoverFamily(index));
   const setShowSkillsPopover = useSetRecoilState(store.showSkillsPopoverFamily(index));
+  const setShowContactsPopover = useSetRecoilState(store.showContactsPopoverFamily(index));
 
   const atCommandEnabled = useRecoilValue(store.atCommand);
   const plusCommandEnabled = useRecoilValue(store.plusCommand);
   const slashCommandEnabled = useRecoilValue(store.slashCommand);
   const dollarCommandEnabled = useRecoilValue(store.dollarCommand);
+  const hashCommandEnabled = useRecoilValue(store.hashCommand);
 
   useEffect(() => {
     if (isAssistantsEndpoint(endpoint)) {
@@ -133,14 +135,24 @@ const useHandleKeyUp = ({
     endpoint,
   ]);
 
+  const handleContactsCommand = useCallback(() => {
+    if (!hashCommandEnabled) {
+      return;
+    }
+    if (shouldTriggerCommand(textAreaRef, '#')) {
+      setShowContactsPopover(true);
+    }
+  }, [textAreaRef, hashCommandEnabled, setShowContactsPopover]);
+
   const commandHandlers = useMemo(
     () => ({
       '@': handleAtCommand,
       '+': handlePlusCommand,
       '/': handlePromptsCommand,
       $: handleSkillsCommand,
+      '#': handleContactsCommand,
     }),
-    [handleAtCommand, handlePlusCommand, handlePromptsCommand, handleSkillsCommand],
+    [handleAtCommand, handlePlusCommand, handlePromptsCommand, handleSkillsCommand, handleContactsCommand],
   );
 
   const handleUpArrow = useCallback(

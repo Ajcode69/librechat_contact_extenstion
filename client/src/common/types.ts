@@ -357,6 +357,8 @@ export type TOptions = {
    * pills are still visible on the user bubble.
    */
   overrideManualSkills?: string[];
+  /** Carry forward contact # mentions when resubmitting/regenerating a message. */
+  overrideContactIds?: string[];
   /** Added conversation for multi-convo feature - sent to server as part of submission payload */
   addedConvo?: t.TConversation;
 };

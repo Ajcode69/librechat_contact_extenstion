@@ -39,6 +39,7 @@ export * from './headers-helpers';
 export { loginPage, registerPage, apiBaseUrl, buildLoginRedirectUrl } from './api-endpoints';
 export { default as request } from './request';
 export { dataService };
+export type { TContact, TContactListParams, TContactListResponse } from './data-service';
 import * as dataService from './data-service';
 /* general helpers */
 export * from './utils';

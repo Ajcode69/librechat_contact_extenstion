@@ -38,6 +38,14 @@ const ContactSchema = new Schema<IContact>(
       of: Schema.Types.Mixed,
       default: () => new Map(),
     },
+    searchText: {
+      type: String,
+      default: '',
+    },
+    embedding: {
+      type: [Number],
+      default: undefined,
+    },
     importBatch: {
       type: String,
       default: '',

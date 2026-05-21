@@ -1,4 +1,6 @@
 const { Tool } = require('@librechat/agents/langchain/tools');
+const db = require('~/models');
+const { searchContactsHybrid } = require('~/server/services/Contacts/service');
 
 const contactsToolJsonSchema = {
   type: 'object',
@@ -7,12 +9,12 @@ const contactsToolJsonSchema = {
       type: 'string',
       enum: ['search', 'list', 'get'],
       description:
-        'The action to perform: "search" to query contacts, "list" to retrieve a paginated list of contacts, "get" to retrieve a specific contact details by ID.',
+        'The action to perform: "search" to semantically query contacts, "list" to retrieve a paginated list of contacts, "get" to retrieve a specific contact details by ID.',
     },
     query: {
       type: 'string',
       description:
-        'Search query for name, company, role, email, or notes (used for "search" action).',
+        'Natural language search query for name, company, role, email, notes, tags, or custom metadata (used for "search" action).',
     },
     limit: {
       type: 'integer',
@@ -54,26 +56,20 @@ class ContactsTool extends Tool {
     super(fields);
     this.name = 'contacts';
     this.description =
-      "Access, search, list, and retrieve contacts from the user's workspace database.";
+      "Access, search, list, and retrieve contacts from the user's workspace database. Use search for natural language questions about people, companies, roles, or interests.";
     this.schema = contactsToolJsonSchema;
-    this.req = fields.req;
     this.userId = fields.userId;
   }
 
   async _call(input) {
     const { action, query, limit = 20, cursor, id, tag, company } = input;
-    const contactMethods = this.req?.app?.locals?.contactMethods;
-
-    if (!contactMethods) {
-      return JSON.stringify({ error: 'Contact integration not available.' });
-    }
 
     try {
       if (action === 'get') {
         if (!id) {
           return JSON.stringify({ error: 'Contact ID is required for get action.' });
         }
-        const contact = await contactMethods.getContact(this.userId, id);
+        const contact = await db.getContact(this.userId, id);
         return JSON.stringify({ contact });
       }
 
@@ -81,7 +77,7 @@ class ContactsTool extends Tool {
         if (!query) {
           return JSON.stringify({ error: 'Query is required for search action.' });
         }
-        const searchResults = await contactMethods.searchContacts(this.userId, query, { limit });
+        const searchResults = await searchContactsHybrid(this.userId, query, { limit });
         return JSON.stringify({ contacts: searchResults });
       }
 
@@ -92,7 +88,7 @@ class ContactsTool extends Tool {
         if (cursor) listParams.cursor = cursor;
         listParams.limit = limit;
 
-        const results = await contactMethods.getContactsByCursor(this.userId, listParams);
+        const results = await db.getContactsByCursor(this.userId, listParams);
         return JSON.stringify(results);
       }
 

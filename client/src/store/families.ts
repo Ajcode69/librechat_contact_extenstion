@@ -319,6 +319,21 @@ const pendingManualSkillsByConvoId = atomFamily<string[], string>({
   default: [],
 });
 
+export type TPendingContactMention = {
+  id: string;
+  name: string;
+};
+
+const pendingContactMentionsByConvoId = atomFamily<TPendingContactMention[], string>({
+  key: 'pendingContactMentionsByConvoId',
+  default: [],
+});
+
+const showContactsPopoverFamily = atomFamily<boolean, string | number | null>({
+  key: 'showContactsPopoverByIndex',
+  default: false,
+});
+
 const globalAudioURLFamily = atomFamily<string | null, string | number | null>({
   key: 'globalAudioURLByIndex',
   default: null,
@@ -518,5 +533,7 @@ export default {
   showPromptsPopoverFamily,
   showSkillsPopoverFamily,
   pendingManualSkillsByConvoId,
+  pendingContactMentionsByConvoId,
+  showContactsPopoverFamily,
   updateConversationSelector,
 };

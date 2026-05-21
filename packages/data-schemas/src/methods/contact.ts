@@ -145,13 +145,14 @@ export function createContactMethods(mongoose: typeof import('mongoose')) {
       }
 
       if (options.search) {
-        // Search either by text index or fuzzy regex match if text fails
         query.$or = [
           { name: new RegExp(options.search, 'i') },
           { company: new RegExp(options.search, 'i') },
           { role: new RegExp(options.search, 'i') },
           { email: new RegExp(options.search, 'i') },
           { tags: new RegExp(options.search, 'i') },
+          { notes: new RegExp(options.search, 'i') },
+          { searchText: new RegExp(options.search, 'i') },
         ];
       }
 
@@ -226,6 +227,7 @@ export function createContactMethods(mongoose: typeof import('mongoose')) {
               { email: new RegExp(cleanQuery, 'i') },
               { tags: new RegExp(cleanQuery, 'i') },
               { notes: new RegExp(cleanQuery, 'i') },
+              { searchText: new RegExp(cleanQuery, 'i') },
             ];
           }
         }
@@ -247,8 +249,93 @@ export function createContactMethods(mongoose: typeof import('mongoose')) {
   }
 
   /**
-   * Bulk create contacts (used by background worker)
+   * Fetch contacts that have embeddings for vector similarity scoring.
    */
+  async function fetchEmbeddableContacts(
+    userId: string | Types.ObjectId,
+    limit = 10000,
+  ): Promise<t.IContactLean[]> {
+    try {
+      const Contact = mongoose.models.Contact;
+      return (await Contact.find({
+        user: new Types.ObjectId(userId),
+        deletedAt: null,
+        'embedding.0': { $exists: true },
+      })
+        .select('name company role email notes tags metadata searchText embedding updatedAt')
+        .sort({ updatedAt: -1 })
+        .limit(limit)
+        .lean()) as t.IContactLean[];
+    } catch (error) {
+      logger.error('Failed to fetch embeddable contacts:', error);
+      throw new Error(
+        `Failed to fetch embeddable contacts: ${error instanceof Error ? error.message : 'Unknown error'}`,
+      );
+    }
+  }
+
+  /**
+   * Fetch multiple contacts by ID for a user.
+   */
+  async function getContactsByIds(
+    userId: string | Types.ObjectId,
+    contactIds: string[],
+  ): Promise<t.IContactLean[]> {
+    try {
+      const Contact = mongoose.models.Contact;
+      const objectIds = contactIds
+        .filter((id) => Types.ObjectId.isValid(id))
+        .map((id) => new Types.ObjectId(id));
+
+      if (objectIds.length === 0) {
+        return [];
+      }
+
+      return (await Contact.find({
+        _id: { $in: objectIds },
+        user: new Types.ObjectId(userId),
+        deletedAt: null,
+      }).lean()) as t.IContactLean[];
+    } catch (error) {
+      logger.error('Failed to get contacts by ids:', error);
+      throw new Error(
+        `Failed to get contacts by ids: ${error instanceof Error ? error.message : 'Unknown error'}`,
+      );
+    }
+  }
+
+  /**
+   * Persist flattened search text and optional embedding vectors.
+   */
+  async function updateContactEmbeddings(
+    updates: Array<{
+      contactId: string | Types.ObjectId;
+      searchText: string;
+      embedding?: number[] | null;
+    }>,
+  ): Promise<void> {
+    if (updates.length === 0) {
+      return;
+    }
+
+    const Contact = mongoose.models.Contact;
+    const bulkOps = updates.map((update) => {
+      const setData: Record<string, unknown> = { searchText: update.searchText };
+      if (update.embedding && update.embedding.length > 0) {
+        setData.embedding = update.embedding;
+      }
+
+      return {
+        updateOne: {
+          filter: { _id: new Types.ObjectId(update.contactId) },
+          update: { $set: setData },
+        },
+      };
+    });
+
+    await Contact.bulkWrite(bulkOps, { ordered: false });
+  }
+
   async function bulkCreateContacts(
     userId: string | Types.ObjectId,
     contactsData: any[],
@@ -308,5 +395,8 @@ export function createContactMethods(mongoose: typeof import('mongoose')) {
     searchContacts,
     bulkCreateContacts,
     findRelevantContacts,
+    fetchEmbeddableContacts,
+    getContactsByIds,
+    updateContactEmbeddings,
   };
 }

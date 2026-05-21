@@ -697,6 +697,11 @@ export const tMessageSchema = z.object({
    */
   manualSkills: z.array(z.string()).optional(),
   /**
+   * Contact IDs the user referenced via the `#` popover on this turn.
+   * Backend injects full contact records into the agent context.
+   */
+  contactIds: z.array(z.string()).optional(),
+  /**
    * Skill names auto-primed on this turn because their `always-apply`
    * frontmatter flag is set. Persisted at turn time so the pinned-variant
    * pills on the user bubble survive reload and stay stable across later

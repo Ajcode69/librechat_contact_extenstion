@@ -5,6 +5,7 @@ const csv = require('fast-csv');
 const IoRedis = require('ioredis');
 const logger = require('~/config/winston');
 const db = require('~/models');
+const { embedAndStoreContacts } = require('../Contacts/service');
 
 const REDIS_URI = process.env.REDIS_URI || 'redis://127.0.0.1:6379';
 const BATCH_SIZE = parseInt(process.env.CONTACTS_IMPORT_BATCH_SIZE) || 5000;
@@ -96,6 +97,7 @@ async function processContactImport(job) {
     async function commitBatch(batch, errors) {
       const session = await mongoose.startSession();
       session.startTransaction();
+      let insertedDocs = [];
       try {
         let inserted = 0;
         let failed = 0;
@@ -110,6 +112,7 @@ async function processContactImport(job) {
           );
           inserted = result.inserted;
           failed = result.failed;
+          insertedDocs = result.insertedDocs || [];
         }
 
         successCount += inserted;
@@ -132,6 +135,25 @@ async function processContactImport(job) {
         throw err;
       } finally {
         session.endSession();
+      }
+
+      if (insertedDocs.length > 0) {
+        try {
+          await embedAndStoreContacts(
+            insertedDocs.map((doc) => ({
+              _id: doc._id,
+              name: doc.name,
+              company: doc.company,
+              role: doc.role,
+              email: doc.email,
+              notes: doc.notes,
+              tags: doc.tags,
+              metadata: doc.metadata,
+            })),
+          );
+        } catch (embedErr) {
+          logger.error(`Embedding batch failed for job ${jobId}:`, embedErr);
+        }
       }
     }
 

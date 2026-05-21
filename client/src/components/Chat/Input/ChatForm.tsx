@@ -29,6 +29,8 @@ import AttachFileChat from './Files/AttachFileChat';
 import FileFormChat from './Files/FileFormChat';
 import TextareaHeader from './TextareaHeader';
 import SkillsCommand from './SkillsCommand';
+import ContactsCommand from './ContactsCommand';
+import PendingContactChips from './PendingContactChips';
 import PromptsCommand from './PromptsCommand';
 import AudioRecorder from './AudioRecorder';
 import CollapseChat from './CollapseChat';
@@ -269,6 +271,11 @@ const ChatForm = memo(function ChatForm({
             conversationId={conversationId}
             agentId={conversation?.agent_id}
           />
+          <ContactsCommand
+            index={index}
+            textAreaRef={textAreaRef}
+            conversationId={conversationId}
+          />
           <div
             onClick={handleContainerClick}
             className={cn(
@@ -280,6 +287,7 @@ const ChatForm = memo(function ChatForm({
             )}
           >
             <TextareaHeader addedConvo={addedConvo} setAddedConvo={setAddedConvo} />
+            <PendingContactChips conversationId={conversationId} />
             <PendingManualSkillsChips conversationId={conversationId} />
             {/* WIP */}
             <EditBadges

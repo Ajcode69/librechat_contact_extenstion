@@ -217,76 +217,179 @@ If you'd like to help translate LibreChat into your language, we'd love your con
 
 ---
 
-## 🗃️ Contacts Workspace Integration & Setup
+## 🗃️ Contacts Workspace Integration (Assignment)
 
-The Contacts Workspace integration adds a structured contacts database to LibreChat and exposes it directly to AI assistants/agents as a first-class tool (`contacts`). Users can manage contacts, import large contact lists, and converse with an AI agent that automatically queries, searches, and summarizes contact information.
+This fork extends LibreChat with a **Contacts Workspace**: structured contact storage, bulk CSV import, hybrid vector search (RAG-style retrieval), and AI chat integration via tool calling and `#` contact mentions.
 
-### 🏗️ Architecture & Features
+### Quick start
 
+1. **Prerequisites**: MongoDB, Redis (required for CSV import worker), Node.js 20+
+2. **Environment** (add to `.env`):
+
+```env
+# Required for background CSV import
+REDIS_URI=redis://127.0.0.1:6379
+
+# Azure OpenAI embeddings for contact vector search (recommended)
+CONTACTS_EMBEDDING_PROVIDER=azure
+AZURE_OPENAI_API_KEY=your_azure_openai_api_key
+AZURE_OPENAI_API_INSTANCE_NAME=your-azure-resource-name
+AZURE_OPENAI_API_EMBEDDINGS_DEPLOYMENT_NAME=your-embedding-deployment-name
+AZURE_OPENAI_API_VERSION=2024-08-01-preview
+
+# Optional tuning
+CONTACTS_MAX_UPLOAD_SIZE=524288000        # 500MB
+CONTACTS_IMPORT_BATCH_SIZE=5000
+CONTACTS_VECTOR_SCAN_LIMIT=10000
 ```
-[User App/Client] ---> [REST APIs (Multer)] ---> [Local Disk Uploads]
-       |                                                 |
-       v                                                 v
-[AI Agent (ContactsTool)]                          [BullMQ Job Queue]
-       |                                                 |
-       +---------------> [MongoDB Store] <--------------- [Background Worker]
-                            (Contacts & Jobs)
+
+3. **Install & run**:
+
+```bash
+npm run smart-reinstall
+npm run backend
+npm run frontend:dev
 ```
 
-1. **MongoDB Database Storage**:
-   - **Contacts Collection**: Stores structured fields (`name`, `company`, `role`, `email`, `notes`), a `tags` array for grouping, and a flexible `metadata` key-value Map to support custom CSV columns.
-   - **Contact Import Jobs**: Tracks background imports, storing status (`pending`, `processing`, `completed`, `failed`), total row count, processed counts, and specific row-level validation errors.
-   - **Performance**: High-performance indexes are created on `user` lookup fields, and a full-text database index is implemented across `name`, `company`, `role`, and `notes`.
-
-2. **Large-Scale CSV Import Worker**:
-   - **BullMQ + Redis**: Uses a robust queue system to handle bulk uploads (supporting up to 1M rows) asynchronously without blocking the server.
-   - **Fast CSV Stream Parsing**: Streams the CSV from the server disk using `fast-csv` to keep memory consumption low.
-   - **Chunked Bulk Insertion**: Inserts contacts in configurable batches (default `5000` rows) using MongoDB bulk write operations to maximize throughput.
-   - **Resource Management**: Automatically pauses/resumes the stream reader during database bulk operations to manage backpressure, and cleans up temporary CSV files immediately upon completion or failure.
-
-3. **Disk Space Safety Enforcement**:
-   - Prior to accepting any CSV upload, the `GET /api/contacts/disk-space` endpoint checks free disk space on the server's upload partition. If the available space falls below `50MB` (default threshold), the upload request is preemptively rejected to prevent storage depletion.
+4. **Enable the contacts tool** on an agent (Agent builder → Tools → **Contacts Workspace**).
+5. Open the **Contacts** panel in the unified sidebar to create/import contacts.
+6. In chat, type **`#`** to mention a contact (autocomplete + context injection).
 
 ---
 
-### 📡 API Endpoints
+### Architecture
 
-All endpoints require standard JWT authentication (`requireJwtAuth`) and isolate contacts by user.
+```
+┌──────────────── Client ────────────────┐
+│ ContactsPanel (CRUD, import, search)   │
+│ Chat: # mention → contactIds in payload│
+└───────────────┬────────────────────────┘
+                │ REST /api/contacts/*
+                ▼
+┌────────────── API Server ──────────────┐
+│ Chunked CSV upload (5MB parts)       │
+│ BullMQ worker → stream parse → bulk  │
+│   insert (transactions) → embed batch│
+│ Hybrid search (lexical + vector)     │
+│ contacts tool + # mention context    │
+└───────────────┬────────────────────────┘
+                ▼
+         MongoDB (contacts, embeddings, import jobs)
+                ▲
+         Redis (BullMQ contact-import queue)
+```
 
-| HTTP Method | Route | Description |
-| :--- | :--- | :--- |
-| **GET** | `/api/contacts` | Retrieve a cursor-paginated list of contacts with optional filtering by `tag` or `company` |
-| **POST** | `/api/contacts/search` | Search contacts with database text-search weights or fuzzy regex |
-| **GET** | `/api/contacts/:id` | Retrieve detailed fields for a specific contact |
-| **POST** | `/api/contacts` | Create a new structured contact |
-| **PUT** | `/api/contacts/:id` | Update an existing contact's fields |
-| **DELETE** | `/api/contacts/:id` | Soft-delete a contact |
-| **GET** | `/api/contacts/disk-space` | Check available disk space and upload limits before uploading |
-| **POST** | `/api/contacts/import` | Upload a CSV file to enqueue a background BullMQ import job |
-| **GET** | `/api/contacts/import/:jobId` | Get current progress status and error list of a background import job |
+| Layer | Location | Responsibility |
+|-------|----------|----------------|
+| Schema | `packages/data-schemas/src/schema/contact.ts` | Fields, `metadata` map, `embedding[]`, indexes |
+| Embeddings | `packages/api/src/contacts/` | Flatten, Google embed, cosine similarity, hybrid search |
+| REST | `api/server/routes/contacts.js` | CRUD, search, chunked import |
+| Worker | `api/server/services/workers/contactImportWorker.js` | Stream CSV, batch insert, **embed on each batch** |
+| AI tool | `api/app/clients/tools/structured/Contacts.js` | `search` / `list` / `get` for agents |
+| Chat context | `api/server/controllers/agents/client.js` | Injects `#`-mentioned contacts into agent context |
+| UI | `client/src/components/Contacts/ContactsPanel.tsx` | Sidebar panel |
+| # mention | `client/src/components/Chat/Input/ContactsCommand.tsx` | Autocomplete + chips |
 
 ---
 
-### 🤖 AI Agent Integration (`contacts` Tool)
+### Chunked CSV upload (network reliability)
 
-AI agents can interact with the contacts database using the registered `contacts` tool.
+Large CSV files (1K–1M rows) are uploaded in **5MB chunks** from the browser (`packages/data-provider/src/data-service.ts` → `importContacts`):
 
-- **Tool Identifier**: `contacts`
-- **Actions Supported**:
-  - `search`: Queries contacts based on semantic query words.
-  - `list`: Lists contacts with cursor pagination, tags, or company filters.
-  - `get`: Retrieves the full details of a specific contact using its database ID.
+1. Client splits the file into 5MB `FormData` chunks
+2. Each chunk is POSTed to `/api/contacts/import/chunk` with `uploadId`, `chunkIndex`, `totalChunks`
+3. After all chunks arrive, client POSTs `/api/contacts/import/complete`
+4. Server assembles the file and enqueues a BullMQ job
 
-To configure and enable the tool for an assistant/agent, make sure it is registered in `manifest.json` under your tools config:
-```json
-{
-  "name": "contacts",
-  "label": "Contacts Workspace",
-  "description": "Access, search, list, and retrieve contacts from the user's workspace database.",
-  "pluginKey": "contacts",
-  "icon": "https://img.icons8.com/color/48/address-book.png"
-}
-```
+This avoids single-request timeouts on slow networks and supports files up to `CONTACTS_MAX_UPLOAD_SIZE` (default 500MB).
+
+---
+
+### Background import reliability
+
+The **contact-import** worker (`contactImportWorker.js`):
+
+- **Streams** CSV with `fast-csv` (constant memory)
+- **Pauses** the parser during MongoDB writes (backpressure)
+- **Inserts in batches** (default 5000) inside **MongoDB transactions**
+- **Tracks progress** in `ContactImportJob` (`processedRows`, `failedRows`, row-level errors)
+- **Embeds each batch** after commit via **Azure OpenAI embeddings** (default when configured; also supports OpenAI/Google)
+- **Cleans up** temp files on success or failure
+- Processes **one import at a time** (`concurrency: 1`) to protect DB/CPU
+
+Client polls `GET /api/contacts/import/:jobId` every 3 seconds until `completed` or `failed`.
+
+---
+
+### AI retrieval (hybrid RAG)
+
+Contacts are **not** dumped into every prompt. Retrieval is **on-demand**:
+
+| Mechanism | Trigger | How it works |
+|-----------|---------|--------------|
+| **`contacts` tool** | Model decides during chat | `search` runs hybrid lexical + vector search, returns top-k JSON |
+| **`#` mention** | User picks contacts in chat | Full contact records injected into agent `additional_instructions` |
+| **Lexical fallback** | Always available | MongoDB text index + regex on all fields including `searchText` / metadata |
+
+**Embedding pipeline**: each contact is flattened to text (including `metadata` fields) → embedded via **Azure OpenAI** (`text-embedding-3-small` or your deployment) → stored as `embedding[]` on the document.
+
+**Hybrid scoring**: `0.7 × cosine_similarity + 0.3 × lexical_score`, deduplicated, capped at 15–50 results.
+
+Example: *"Who is interested in AI infrastructure?"* matches contacts where `Industry` lives only in `metadata` because it is included in the flattened embedding text.
+
+---
+
+### API endpoints
+
+All routes require JWT auth and are scoped per user.
+
+| Method | Route | Description |
+|--------|-------|-------------|
+| GET | `/api/contacts` | Cursor-paginated list (`search`, `tag`, `company` filters) |
+| POST | `/api/contacts/search` | Hybrid semantic + lexical search |
+| GET | `/api/contacts/:id` | Single contact |
+| POST | `/api/contacts` | Create (+ embed) |
+| PUT | `/api/contacts/:id` | Update (+ re-embed) |
+| DELETE | `/api/contacts/:id` | Soft delete |
+| GET | `/api/contacts/disk-space` | Pre-upload disk check |
+| POST | `/api/contacts/import/chunk` | Upload one CSV chunk |
+| POST | `/api/contacts/import/complete` | Finalize upload → queue job |
+| POST | `/api/contacts/import` | Single-shot upload (legacy) |
+| GET | `/api/contacts/import/:jobId` | Import job status |
+
+---
+
+### Design questions
+
+**1. If the system needed to support 1,000,000 contacts, how would you redesign it?**
+
+- Move embeddings to **MongoDB Atlas Vector Search** or a dedicated vector DB (Pinecone, Qdrant)
+- **Async embedding queue** decoupled from import (separate BullMQ queue, horizontal workers)
+- **Shard** by `userId` / `tenantId`; archive cold contacts
+- Replace in-memory cosine scan with **approximate nearest neighbor** indexes
+- **Pre-compute** common filter indexes (`company`, `role`, `tags`) for structured queries
+- Stream export/import via object storage (S3/Azure Blob) instead of local disk
+
+**2. How would you ensure the assistant retrieves the most relevant contacts for a query?**
+
+Current approach (implemented):
+
+- Hybrid **vector + lexical** search with weighted merge
+- Tool calling so the model passes a focused natural-language query (not all contacts)
+- `#` mentions for guaranteed inclusion of specific contacts
+- Flattened text includes all metadata for semantic matching
+
+Future improvements: query decomposition (extract `company=Stripe`, `role=CTO`), cross-encoder reranking, user feedback loop on search results.
+
+**3. What are the limitations of the current implementation?**
+
+- Vector scan loads up to `CONTACTS_VECTOR_SCAN_LIMIT` embeddings per user (fine for 10K, not 1M)
+- Embeddings require **Azure OpenAI** (or OpenAI/Google fallback); without a provider, search falls back to lexical only
+- CSV import requires Redis; no import without it
+- `contacts` tool must be enabled on the agent manually
+- `#` mention uses a separate trigger from `@` (agents/endpoints) to avoid conflicts
+- No automated tests for contacts yet
+- Single worker concurrency for imports (safe but slow for parallel uploads)
 
 ---
 
