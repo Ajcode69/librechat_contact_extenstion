@@ -195,6 +195,20 @@ async function streamFileToAzure({
  * @param {string} [params.containerName] - The Azure Blob container name.
  * @returns {Promise<{ filepath: string, bytes: number }>} An object containing the blob URL and its byte size.
  */
+/**
+ * Streams a file from the local file system to Azure Blob Storage.
+ *
+ * This function reads the file from disk and then uploads it to Azure Blob Storage
+ * at the path: {basePath}/{userId}/{fileName}.
+ *
+ * @param {Object} params
+ * @param {object} params.req - The Express request object.
+ * @param {Express.Multer.File} params.file - The file object.
+ * @param {string} params.file_id - The file id.
+ * @param {string} [params.basePath='images'] - The base folder within the container.
+ * @param {string} [params.containerName] - The Azure Blob container name.
+ * @returns {Promise<{ filepath: string, bytes: number }>} An object containing the blob URL and its byte size.
+ */
 async function uploadFileToAzure({
   req,
   file,
@@ -245,6 +259,65 @@ async function getAzureFileStream(_req, fileURL) {
   }
 }
 
+/**
+ * Stages a block (chunk) to Azure Blob Storage.
+ */
+async function stageBlockToAzure({
+  userId,
+  uploadId,
+  chunkIndex,
+  buffer,
+  containerName = AZURE_CONTAINER_NAME,
+}) {
+  try {
+    const containerClient = await getAzureContainerClient(containerName);
+    const access = AZURE_STORAGE_PUBLIC_ACCESS?.toLowerCase() === 'true' ? 'blob' : undefined;
+    await containerClient.createIfNotExists({ access });
+    const blobPath = `contacts/${userId}/${uploadId}.csv`;
+    const blockBlobClient = containerClient.getBlockBlobClient(blobPath);
+
+    // Block ID must be base64 encoded and of equal length
+    const blockId = Buffer.from(String(chunkIndex).padStart(7, '0')).toString('base64');
+    await blockBlobClient.stageBlock(blockId, buffer, buffer.length);
+    return blockBlobClient.url;
+  } catch (error) {
+    logger.error('[stageBlockToAzure] Error staging block:', error);
+    throw error;
+  }
+}
+
+/**
+ * Commits staged blocks to Azure Blob Storage.
+ */
+async function commitBlockListToAzure({
+  userId,
+  uploadId,
+  totalChunks,
+  containerName = AZURE_CONTAINER_NAME,
+}) {
+  try {
+    const containerClient = await getAzureContainerClient(containerName);
+    const blobPath = `contacts/${userId}/${uploadId}.csv`;
+    const blockBlobClient = containerClient.getBlockBlobClient(blobPath);
+
+    const blockIds = [];
+    for (let i = 0; i < totalChunks; i++) {
+      blockIds.push(Buffer.from(String(i).padStart(7, '0')).toString('base64'));
+    }
+
+    await blockBlobClient.commitBlockList(blockIds, {
+      blobHTTPHeaders: {
+        blobContentType: 'text/csv',
+      },
+    });
+
+    return blockBlobClient.url;
+  } catch (error) {
+    logger.error('[commitBlockListToAzure] Error committing block list:', error);
+    throw error;
+  }
+}
+
 module.exports = {
   saveBufferToAzure,
   saveURLToAzure,
@@ -252,4 +325,6 @@ module.exports = {
   deleteFileFromAzure,
   uploadFileToAzure,
   getAzureFileStream,
+  stageBlockToAzure,
+  commitBlockListToAzure,
 };

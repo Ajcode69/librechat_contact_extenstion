@@ -219,9 +219,20 @@ const ContactsPanel = memo(function ContactsPanel() {
       if (!file) {
         return;
       }
-      setImportStatus('uploading');
+      setImportStatus('Uploading CSV: 0%');
       try {
-        const res = await dataService.importContacts(file);
+        const res = await dataService.importContacts(file, null, (chunkText) => {
+          if (chunkText.startsWith('uploading_chunk:')) {
+            const parts = chunkText.split(':');
+            const match = parts[1].match(/(\d+)_of_(\d+)/);
+            if (match) {
+              const current = parseInt(match[1], 10);
+              const total = parseInt(match[2], 10);
+              const pct = Math.round((current / total) * 100);
+              setImportStatus(`Uploading CSV: ${pct}% (${current} of ${total} chunks)`);
+            }
+          }
+        });
         setImportStatus('processing');
         showToast('Import started — processing in background');
 
@@ -500,7 +511,7 @@ const ContactsPanel = memo(function ContactsPanel() {
       {importStatus && (
         <div className="mx-3 flex items-center gap-2 rounded-md bg-blue-500/10 px-3 py-2 text-xs text-blue-400">
           <Loader2 className="h-3 w-3 animate-spin" />
-          {importStatus === 'uploading' ? 'Uploading CSV...' : 'Processing import in background...'}
+          {importStatus === 'processing' ? 'Processing import in background...' : importStatus}
         </div>
       )}
 

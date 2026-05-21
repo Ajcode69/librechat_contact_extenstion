@@ -1367,11 +1367,45 @@ export function checkContactDiskSpace(): Promise<TDiskSpaceResponse> {
   return request.get(endpoints.contactDiskSpace());
 }
 
-export function importContacts(file: File, signal?: AbortSignal | null): Promise<{ message: string; jobId: string }> {
-  const formData = new FormData();
-  formData.append('file', file);
-  const requestConfig = signal ? { signal } : undefined;
-  return request.postMultiPart(endpoints.importContacts(), formData, requestConfig);
+export async function importContacts(
+  file: File,
+  signal?: AbortSignal | null,
+  onProgress?: (progressText: string) => void,
+): Promise<{ message: string; jobId: string }> {
+  const CHUNK_SIZE = 5 * 1024 * 1024; // 5MB chunks
+  const totalChunks = Math.ceil(file.size / CHUNK_SIZE);
+  const uploadId = Date.now().toString() + '-' + Math.round(Math.random() * 1e9);
+
+  for (let chunkIndex = 0; chunkIndex < totalChunks; chunkIndex++) {
+    if (signal?.aborted) {
+      throw new Error('Upload aborted');
+    }
+
+    if (onProgress) {
+      onProgress(`uploading_chunk:${chunkIndex + 1}_of_${totalChunks}`);
+    }
+
+    const start = chunkIndex * CHUNK_SIZE;
+    const end = Math.min(start + CHUNK_SIZE, file.size);
+    const chunkBlob = file.slice(start, end);
+    const chunkFile = new File([chunkBlob], file.name, { type: file.type });
+
+    const formData = new FormData();
+    formData.append('file', chunkFile);
+    formData.append('uploadId', uploadId);
+    formData.append('chunkIndex', String(chunkIndex));
+    formData.append('totalChunks', String(totalChunks));
+
+    const requestConfig = signal ? { signal } : undefined;
+    await request.postMultiPart(`${endpoints.contacts()}/import/chunk`, formData, requestConfig);
+  }
+
+  // Complete the upload
+  return request.post(`${endpoints.contacts()}/import/complete`, {
+    uploadId,
+    fileName: file.name,
+    totalChunks,
+  });
 }
 
 export function getImportStatus(jobId: string): Promise<TImportJob> {

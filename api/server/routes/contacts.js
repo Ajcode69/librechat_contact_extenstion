@@ -268,6 +268,133 @@ router.post(
 );
 
 /**
+ * POST /api/contacts/import/chunk
+ * Receive CSV file chunk and stage it to Azure or append to local temp file
+ */
+router.post(
+  '/import/chunk',
+  (req, res, next) => {
+    upload.single('file')(req, res, (err) => {
+      if (err) {
+        logger.error('Multer chunk upload error:', err);
+        return res.status(400).json({ error: err.message });
+      }
+      next();
+    });
+  },
+  async (req, res) => {
+    try {
+      const { uploadId, chunkIndex } = req.body;
+      if (!uploadId || chunkIndex === undefined || !req.file) {
+        return res.status(400).json({ error: 'Missing required chunk parameters.' });
+      }
+
+      const chunkBuffer = fs.readFileSync(req.file.path);
+      if (fs.existsSync(req.file.path)) {
+        fs.unlinkSync(req.file.path);
+      }
+
+      if (process.env.AZURE_STORAGE_CONNECTION_STRING && process.env.AZURE_CONTAINER_NAME) {
+        const { stageBlockToAzure } = require('../services/Files/Azure/crud');
+        await stageBlockToAzure({
+          userId: req.user.id,
+          uploadId,
+          chunkIndex: parseInt(chunkIndex, 10),
+          buffer: chunkBuffer,
+        });
+      } else {
+        const localTempPath = path.join(uploadDir, `temp-${req.user.id}-${uploadId}.csv`);
+        if (parseInt(chunkIndex, 10) === 0 && fs.existsSync(localTempPath)) {
+          fs.unlinkSync(localTempPath);
+        }
+        fs.appendFileSync(localTempPath, chunkBuffer);
+      }
+
+      res.status(200).json({ success: true, message: `Chunk ${chunkIndex} uploaded successfully.` });
+    } catch (error) {
+      logger.error('Chunk upload failed:', error);
+      res.status(500).json({ error: error.message });
+    }
+  }
+);
+
+/**
+ * POST /api/contacts/import/complete
+ * Commit chunks to create final file, then queue BullMQ job
+ */
+router.post(
+  '/import/complete',
+  async (req, res) => {
+    try {
+      const { uploadId, fileName, totalChunks } = req.body;
+      if (!uploadId || !fileName || !totalChunks) {
+        return res.status(400).json({ error: 'Missing required completion parameters.' });
+      }
+
+      if (!contactImportQueue) {
+        return res.status(503).json({
+          error: 'Background processing service is currently unavailable. Please ensure Redis is running.',
+        });
+      }
+
+      let filePathOrUrl = '';
+      if (process.env.AZURE_STORAGE_CONNECTION_STRING && process.env.AZURE_CONTAINER_NAME) {
+        const { commitBlockListToAzure } = require('../services/Files/Azure/crud');
+        filePathOrUrl = await commitBlockListToAzure({
+          userId: req.user.id,
+          uploadId,
+          totalChunks: parseInt(totalChunks, 10),
+        });
+      } else {
+        const localTempPath = path.join(uploadDir, `temp-${req.user.id}-${uploadId}.csv`);
+        const finalLocalPath = path.join(uploadDir, `${req.user.id}-${uploadId}.csv`);
+
+        if (!fs.existsSync(localTempPath)) {
+          return res.status(400).json({ error: 'Staged local upload file not found.' });
+        }
+
+        fs.renameSync(localTempPath, finalLocalPath);
+        filePathOrUrl = finalLocalPath;
+      }
+
+      const ContactImportJob = mongoose.models.ContactImportJob;
+      const jobRecord = await ContactImportJob.create({
+        user: req.user.id,
+        status: 'pending',
+        fileName,
+        filePath: filePathOrUrl,
+        totalRows: 0,
+        processedRows: 0,
+        failedRows: 0,
+        errors: [],
+        tenantId: req.user.tenantId,
+      });
+
+      await contactImportQueue.add(
+        'import',
+        {
+          jobId: jobRecord._id.toString(),
+          filePath: filePathOrUrl,
+          userId: req.user.id,
+          tenantId: req.user.tenantId,
+        },
+        {
+          jobId: jobRecord._id.toString(),
+        },
+      );
+
+      res.status(202).json({
+        message: 'Chunked CSV upload completed. Import processing started in the background.',
+        jobId: jobRecord._id,
+      });
+    } catch (error) {
+      logger.error('Chunk completion setup failed:', error);
+      res.status(500).json({ error: error.message });
+    }
+  }
+);
+
+/**
  * GET /api/contacts/import/:jobId
  * Get progress status of the CSV import job
  */

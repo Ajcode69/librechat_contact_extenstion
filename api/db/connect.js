@@ -69,7 +69,18 @@ async function connectDb() {
     logger.info('Mongo Connection options');
     logger.info(JSON.stringify(opts, null, 2));
     mongoose.set('strictQuery', true);
-    cached.promise = mongoose.connect(MONGO_URI, opts).then((mongoose) => {
+    cached.promise = mongoose.connect(MONGO_URI, opts).then(async (mongoose) => {
+      try {
+        const admin = mongoose.connection.db.admin();
+        const status = await admin.command({ replSetGetStatus: 1 }).catch(() => null);
+        if (!status) {
+          logger.info('Initiating replica set rs0...');
+          await admin.command({ replSetInitiate: {} });
+          logger.info('Replica set rs0 initiated successfully!');
+        }
+      } catch (err) {
+        logger.debug('Replica set auto-initiation skipped or failed:', err.message);
+      }
       return mongoose;
     });
   }
