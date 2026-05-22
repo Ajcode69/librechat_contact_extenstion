@@ -38,8 +38,99 @@ if (redisConnection) {
   });
 }
 
-// Known contact schema fields
-const KNOWN_FIELDS = ['name', 'company', 'role', 'email', 'notes'];
+const CORE_FIELD_ALIASES = {
+  name: ['name'],
+  company: ['company', 'company_name'],
+  role: ['role', 'designation'],
+  email: ['email'],
+  notes: ['notes'],
+  tags: ['tags'],
+};
+
+const NAME_PART_FIELDS = ['first_name', 'middle_name', 'last_name'];
+const FALLBACK_NAME_FIELDS = ['email', 'mobile'];
+const SKIPPED_METADATA_FIELDS = new Set(['id', 'chat_id', 'state_id', 'message_id']);
+const CORE_FIELDS = new Set([
+  ...Object.values(CORE_FIELD_ALIASES).flat(),
+  ...NAME_PART_FIELDS,
+  'tags',
+]);
+
+function normalizeHeader(header) {
+  return String(header || '').trim().toLowerCase();
+}
+
+function normalizeRow(row) {
+  return Object.entries(row).reduce((acc, [key, value]) => {
+    const normalizedKey = normalizeHeader(key);
+    if (!normalizedKey) {
+      return acc;
+    }
+    acc[normalizedKey] = String(value ?? '').trim();
+    return acc;
+  }, {});
+}
+
+function firstValue(row, fields) {
+  for (const field of fields) {
+    if (row[field]) {
+      return row[field];
+    }
+  }
+  return '';
+}
+
+function buildContactName(row) {
+  const explicitName = firstValue(row, CORE_FIELD_ALIASES.name);
+  if (explicitName) {
+    return explicitName;
+  }
+
+  const nameFromParts = NAME_PART_FIELDS.map((field) => row[field]).filter(Boolean).join(' ');
+  if (nameFromParts) {
+    return nameFromParts;
+  }
+
+  return firstValue(row, FALLBACK_NAME_FIELDS);
+}
+
+function parseTags(tags) {
+  if (!tags) {
+    return [];
+  }
+  return tags
+    .split(',')
+    .map((tag) => tag.trim())
+    .filter(Boolean);
+}
+
+function buildMetadata(row) {
+  return Object.entries(row).reduce((metadata, [key, value]) => {
+    if (!value || CORE_FIELDS.has(key) || SKIPPED_METADATA_FIELDS.has(key)) {
+      return metadata;
+    }
+    metadata[key] = value;
+    return metadata;
+  }, {});
+}
+
+function normalizeContactRow(row) {
+  const normalizedRow = normalizeRow(row);
+  const name = buildContactName(normalizedRow);
+  if (!name) {
+    return null;
+  }
+
+  return {
+    name,
+    company: firstValue(normalizedRow, CORE_FIELD_ALIASES.company),
+    role: firstValue(normalizedRow, CORE_FIELD_ALIASES.role),
+    email: firstValue(normalizedRow, CORE_FIELD_ALIASES.email),
+    notes: firstValue(normalizedRow, CORE_FIELD_ALIASES.notes),
+    tags: parseTags(firstValue(normalizedRow, CORE_FIELD_ALIASES.tags)),
+    metadata: buildMetadata(normalizedRow),
+  };
+}
 
 /**
  * Worker job handler
@@ -167,40 +258,14 @@ async function processContactImport(job) {
       }
 
       try {
-        // Validation: name is required
-        if (!row.name || !row.name.trim()) {
+        const contactData = normalizeContactRow(row);
+        if (!contactData) {
           errorsList.push({
             row: rowCount,
-            message: 'Name is a required field and cannot be empty.',
+            message: 'A contact name, email, or mobile number is required.',
           });
           return;
         }
-
-        const contactData = {
-          name: row.name.trim(),
-          company: row.company ? row.company.trim() : '',
-          role: row.role ? row.role.trim() : '',
-          email: row.email ? row.email.trim() : '',
-          notes: row.notes ? row.notes.trim() : '',
-          tags: [],
-          metadata: {},
-        };
-
-        // Parse tags
-        if (row.tags) {
-          contactData.tags = row.tags
-            .split(',')
-            .map((t) => t.trim())
-            .filter((t) => t.length > 0);
-        }
-
-        // Put any unknown columns into metadata
-        Object.keys(row).forEach((key) => {
-          const lowerKey = key.toLowerCase().trim();
-          if (!KNOWN_FIELDS.includes(lowerKey) && lowerKey !== 'tags') {
-            contactData.metadata[key] = row[key];
-          }
-        });
 
         contactsBatch.push(contactData);
 

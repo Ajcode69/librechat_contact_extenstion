@@ -12,9 +12,12 @@ type EmbeddingProvider = 'azure' | 'openai' | 'google';
 type AzureEmbeddingConfig = {
   provider: 'azure';
   apiKey: string;
-  instanceName: string;
   deploymentName: string;
   apiVersion: string;
+  /** Full base URL, e.g. https://resource.cognitiveservices.azure.com */
+  endpoint?: string;
+  /** Legacy resource name for *.openai.azure.com URLs */
+  instanceName?: string;
 };
 
 type OpenAIEmbeddingConfig = {
@@ -64,10 +67,19 @@ function resolveAzureInstanceName(): string | undefined {
   );
 }
 
+function resolveAzureEndpoint(): string | undefined {
+  const endpoint = process.env.CONTACTS_AZURE_ENDPOINT || process.env.AZURE_OPENAI_ENDPOINT;
+  if (!endpoint) {
+    return undefined;
+  }
+  return endpoint.trim().replace(/\/$/, '');
+}
+
 function resolveAzureEmbeddingsDeployment(): string | undefined {
   return (
     process.env.CONTACTS_AZURE_EMBEDDINGS_DEPLOYMENT ||
     process.env.AZURE_OPENAI_API_EMBEDDINGS_DEPLOYMENT_NAME ||
+    process.env.AZURE_OPENAI_EMBEDDING_DEPLOYMENT ||
     undefined
   );
 }
@@ -96,17 +108,22 @@ function resolveOpenAIApiKey(): string | undefined {
 
 function getAzureConfig(): AzureEmbeddingConfig | null {
   const apiKey = resolveAzureApiKey();
-  const instanceName = resolveAzureInstanceName();
   const deploymentName = resolveAzureEmbeddingsDeployment();
-  if (!apiKey || !instanceName || !deploymentName) {
+  const endpoint = resolveAzureEndpoint();
+  const instanceName = resolveAzureInstanceName();
+  if (!apiKey || !deploymentName) {
+    return null;
+  }
+  if (!endpoint && !instanceName) {
     return null;
   }
   return {
     provider: 'azure',
     apiKey,
-    instanceName,
     deploymentName,
     apiVersion: resolveAzureApiVersion(),
+    endpoint,
+    instanceName,
   };
 }
 
@@ -167,12 +184,19 @@ export function isEmbeddingConfigured(): boolean {
   return getEmbeddingConfig() != null;
 }
 
+function buildAzureEmbeddingsUrl(config: AzureEmbeddingConfig): string {
+  if (config.endpoint) {
+    return `${config.endpoint}/openai/deployments/${config.deploymentName}/embeddings?api-version=${config.apiVersion}`;
+  }
+  return `https://${config.instanceName}.openai.azure.com/openai/deployments/${config.deploymentName}/embeddings?api-version=${config.apiVersion}`;
+}
+
 async function embedAzureTexts(
   texts: string[],
   config: AzureEmbeddingConfig,
 ): Promise<(number[] | null)[]> {
   const results: (number[] | null)[] = new Array(texts.length).fill(null);
-  const baseUrl = `https://${config.instanceName}.openai.azure.com/openai/deployments/${config.deploymentName}/embeddings?api-version=${config.apiVersion}`;
+  const baseUrl = buildAzureEmbeddingsUrl(config);
 
   for (let offset = 0; offset < texts.length; offset += DEFAULT_BATCH_SIZE) {
     const chunk = texts.slice(offset, offset + DEFAULT_BATCH_SIZE);
