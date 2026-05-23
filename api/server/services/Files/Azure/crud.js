@@ -247,6 +247,20 @@ async function uploadFileToAzure({
  */
 async function getAzureFileStream(_req, fileURL) {
   try {
+    const parsedURL = new URL(fileURL);
+    const blobPath = decodeURIComponent(parsedURL.pathname)
+      .replace(/^\/+/, '')
+      .split('/')
+      .slice(1)
+      .join('/');
+
+    if (blobPath) {
+      const containerClient = await getAzureContainerClient(AZURE_CONTAINER_NAME);
+      const blockBlobClient = containerClient.getBlockBlobClient(blobPath);
+      const response = await blockBlobClient.download(0);
+      return response.readableStreamBody;
+    }
+
     const response = await axios({
       method: 'get',
       url: fileURL,

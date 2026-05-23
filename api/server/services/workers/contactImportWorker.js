@@ -8,7 +8,7 @@ const db = require('~/models');
 const { embedAndStoreContacts } = require('../Contacts/service');
 
 const REDIS_URI = process.env.REDIS_URI || 'redis://127.0.0.1:6379';
-const BATCH_SIZE = parseInt(process.env.CONTACTS_IMPORT_BATCH_SIZE) || 5000;
+const BATCH_SIZE = parseInt(process.env.CONTACTS_IMPORT_BATCH_SIZE) || 10000;
 
 // Initialize Redis connection
 let redisConnection;
@@ -186,47 +186,30 @@ async function processContactImport(job) {
     const errorsList = [];
 
     async function commitBatch(batch, errors) {
-      const session = await mongoose.startSession();
-      session.startTransaction();
       let insertedDocs = [];
-      try {
-        let inserted = 0;
-        let failed = 0;
+      let inserted = 0;
+      let failed = 0;
 
-        if (batch.length > 0) {
-          const result = await db.bulkCreateContacts(
-            userId,
-            batch,
-            jobId,
-            tenantId,
-            session
-          );
-          inserted = result.inserted;
-          failed = result.failed;
-          insertedDocs = result.insertedDocs || [];
-        }
-
-        successCount += inserted;
-        failedCount += failed + errors.length;
-
-        // Update the job progress in the database inside the transaction
-        await ContactImportJob.findByIdAndUpdate(
+      if (batch.length > 0) {
+        const result = await db.bulkCreateContacts(
+          userId,
+          batch,
           jobId,
-          {
-            processedRows: successCount,
-            failedRows: failedCount,
-            $push: { errors: { $each: errors } },
-          },
-          { session }
+          tenantId,
         );
-
-        await session.commitTransaction();
-      } catch (err) {
-        await session.abortTransaction();
-        throw err;
-      } finally {
-        session.endSession();
+        inserted = result.inserted;
+        failed = result.failed;
+        insertedDocs = result.insertedDocs || [];
       }
+
+      successCount += inserted;
+      failedCount += failed + errors.length;
+
+      await ContactImportJob.findByIdAndUpdate(jobId, {
+        processedRows: successCount,
+        failedRows: failedCount,
+        $push: { errors: { $each: errors } },
+      });
 
       if (insertedDocs.length > 0) {
         try {

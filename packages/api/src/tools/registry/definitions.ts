@@ -350,6 +350,48 @@ export const fileSearchSchema: ExtendedJsonSchema = {
   required: ['query'],
 };
 
+/** Contacts tool JSON schema */
+export const contactsSchema: ExtendedJsonSchema = {
+  type: 'object',
+  properties: {
+    action: {
+      type: 'string',
+      enum: ['search', 'list', 'get'],
+      description:
+        'The action to perform: "search" to semantically query contacts, "list" to retrieve a paginated list of contacts, "get" to retrieve a specific contact details by ID.',
+    },
+    query: {
+      type: 'string',
+      description:
+        'Natural language search query for name, company, role, email, notes, tags, or custom metadata (used for "search" action).',
+    },
+    limit: {
+      type: 'integer',
+      minimum: 1,
+      maximum: 100,
+      description:
+        'Maximum number of results to return (used for "search" and "list" actions). Defaults to 20.',
+    },
+    cursor: {
+      type: 'string',
+      description: 'Pagination cursor for "list" action.',
+    },
+    id: {
+      type: 'string',
+      description: 'The unique database ID of the contact to retrieve (used for "get" action).',
+    },
+    tag: {
+      type: 'string',
+      description: 'Filter contacts by tag (used for "list" action).',
+    },
+    company: {
+      type: 'string',
+      description: 'Filter contacts by company (used for "list" action).',
+    },
+  },
+  required: ['action'],
+};
+
 /** Tool definitions registry - maps tool names to their definitions */
 export const toolDefinitions: Record<string, ToolRegistryDefinition> = {
   google: {
@@ -444,6 +486,13 @@ export const toolDefinitions: Record<string, ToolRegistryDefinition> = {
     schema: geminiToolkit.gemini_image_gen.schema,
     toolType: 'builtin',
     responseFormat: geminiToolkit.gemini_image_gen.responseFormat,
+  },
+  contacts: {
+    name: 'contacts',
+    description:
+      "Access, search, list, and retrieve contacts from the user's workspace database. Use search for natural language questions about people, companies, roles, or interests.",
+    schema: contactsSchema,
+    toolType: 'builtin',
   },
 };
 

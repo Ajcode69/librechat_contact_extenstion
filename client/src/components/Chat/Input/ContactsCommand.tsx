@@ -12,6 +12,7 @@ import store from '~/store';
 
 const commandChar = '#';
 const ROW_HEIGHT = 44;
+const CONTACTS_LIMIT = 100;
 const contactIcon = <BookUser className="icon-md text-green-500" />;
 
 type ContactOption = {
@@ -58,8 +59,8 @@ function ContactsCommandContent({
     setLoading(true);
     try {
       const response = query.trim()
-        ? await dataService.searchContacts(query.trim(), 20)
-        : await dataService.getContacts({ limit: 20 });
+        ? await dataService.searchContacts(query.trim(), CONTACTS_LIMIT, 'mention')
+        : await dataService.getContacts({ limit: CONTACTS_LIMIT });
       const contacts = response.contacts ?? [];
       setOptions(
         contacts.map((contact: TContact) => ({
@@ -130,7 +131,7 @@ function ContactsCommandContent({
       <div key={key} style={style}>
         <MentionItem
           index={rowIndex}
-          activeIndex={activeIndex}
+          isActive={rowIndex === activeIndex}
           onClick={() => handleSelect(contact)}
           onMouseEnter={() => setActiveIndex(rowIndex)}
           name={contact.label ?? ''}
@@ -142,57 +143,67 @@ function ContactsCommandContent({
     );
   };
 
-  if (!open) {
-    return null;
-  }
+  useEffect(() => {
+    if (!open) {
+      setActiveIndex(0);
+    }
+  }, [open]);
+
+  useEffect(() => {
+    setActiveIndex((prev) => Math.min(prev, Math.max(matches.length - 1, 0)));
+  }, [matches.length]);
 
   return (
-    <div className="absolute bottom-full left-0 z-50 mb-2 w-full max-w-md overflow-hidden rounded-lg border border-border-medium bg-surface-primary shadow-lg">
-      <div className="border-b border-border-light px-3 py-2">
-        <input
-          ref={initInputRef}
-          value={searchValue}
-          onChange={(e) => setSearchValue(e.target.value)}
-          placeholder={localize('com_ui_contacts_mention_search')}
-          className="w-full bg-transparent text-sm text-text-primary placeholder-text-tertiary focus:outline-none"
-          onKeyDown={(e) => {
-            if (e.key === 'ArrowDown') {
-              e.preventDefault();
-              setActiveIndex((prev) => Math.min(prev + 1, matches.length - 1));
-            } else if (e.key === 'ArrowUp') {
-              e.preventDefault();
-              setActiveIndex((prev) => Math.max(prev - 1, 0));
-            } else if (e.key === 'Enter') {
-              e.preventDefault();
-              handleSelect(matches[activeIndex] as ContactOption);
-            } else if (e.key === 'Escape') {
-              setShowContactsPopover(false);
-            }
-          }}
-        />
-      </div>
-      <div className="max-h-60">
-        {loading ? (
-          <div className="flex items-center justify-center py-6">
-            <Spinner className="size-4" />
-          </div>
-        ) : matches.length === 0 ? (
-          <div className="px-3 py-4 text-sm text-text-tertiary">
-            {localize('com_ui_contacts_empty')}
-          </div>
-        ) : (
-          <AutoSizer disableHeight>
-            {({ width }) => (
-              <List
-                width={width}
-                height={Math.min(matches.length * ROW_HEIGHT, 240)}
-                rowCount={matches.length}
-                rowHeight={ROW_HEIGHT}
-                rowRenderer={rowRenderer}
-                scrollToIndex={activeIndex}
-              />
+    <div className="absolute bottom-28 z-10 w-full space-y-2">
+      <div className="popover border-border-medium rounded-2xl border bg-surface-primary p-2 shadow-lg max-w-md">
+        <div className="border-b border-border-light px-3 py-2">
+          <input
+            ref={initInputRef}
+            value={searchValue}
+            onChange={(e) => setSearchValue(e.target.value)}
+            placeholder={localize('com_ui_contacts_mention_search')}
+            className="w-full bg-transparent text-sm text-text-primary placeholder-text-tertiary focus:outline-none"
+            onKeyDown={(e) => {
+              if (e.key === 'ArrowDown') {
+                e.preventDefault();
+                setActiveIndex((prev) => Math.min(prev + 1, matches.length - 1));
+              } else if (e.key === 'ArrowUp') {
+                e.preventDefault();
+                setActiveIndex((prev) => Math.max(prev - 1, 0));
+              } else if (e.key === 'Enter') {
+                e.preventDefault();
+                handleSelect(matches[activeIndex] as ContactOption);
+              } else if (e.key === 'Escape') {
+                setShowContactsPopover(false);
+              }
+            }}
+          />
+        </div>
+        {open && (
+          <div className="max-h-60">
+            {loading ? (
+              <div className="flex items-center justify-center py-6">
+                <Spinner className="size-4" />
+              </div>
+            ) : matches.length === 0 ? (
+              <div className="px-3 py-4 text-sm text-text-tertiary">
+                {localize('com_ui_contacts_empty')}
+              </div>
+            ) : (
+              <AutoSizer disableHeight>
+                {({ width }) => (
+                  <List
+                    width={width}
+                    height={Math.min(matches.length * ROW_HEIGHT, 240)}
+                    rowCount={matches.length}
+                    rowHeight={ROW_HEIGHT}
+                    rowRenderer={rowRenderer}
+                    scrollToIndex={activeIndex}
+                  />
+                )}
+              </AutoSizer>
             )}
-          </AutoSizer>
+          </div>
         )}
       </div>
     </div>

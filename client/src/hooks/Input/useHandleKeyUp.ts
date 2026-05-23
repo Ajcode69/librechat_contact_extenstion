@@ -28,6 +28,29 @@ const invalidKeys = {
  * pasted content that happens to start with a command character.
  */
 const MAX_COMMAND_TRIGGER_LENGTH = 5;
+const getCommandPrefix = (
+  textAreaRef: React.RefObject<HTMLTextAreaElement>,
+  commandChar: string,
+): string | null => {
+  const text = textAreaRef.current?.value;
+  const cursor = textAreaRef.current?.selectionStart;
+  if (typeof text !== 'string' || typeof cursor !== 'number') {
+    return null;
+  }
+
+  const beforeCursor = text.slice(0, cursor);
+  const commandIndex = beforeCursor.lastIndexOf(commandChar);
+  if (commandIndex < 0) {
+    return null;
+  }
+  if (commandIndex > 0 && !/\s/.test(beforeCursor[commandIndex - 1])) {
+    return null;
+  }
+
+  const prefix = beforeCursor.slice(commandIndex + 1);
+  return /\s/.test(prefix) ? null : prefix;
+};
+
 const shouldTriggerCommand = (
   textAreaRef: React.RefObject<HTMLTextAreaElement>,
   commandChar: string,
@@ -43,6 +66,11 @@ const shouldTriggerCommand = (
   }
 
   return startPos === 1 || (startPos === text.length && text.length <= MAX_COMMAND_TRIGGER_LENGTH);
+};
+
+const shouldTriggerContactCommand = (textAreaRef: React.RefObject<HTMLTextAreaElement>) => {
+  const prefix = getCommandPrefix(textAreaRef, '#');
+  return prefix != null && prefix.length <= MAX_COMMAND_TRIGGER_LENGTH;
 };
 
 /**
@@ -139,7 +167,7 @@ const useHandleKeyUp = ({
     if (!hashCommandEnabled) {
       return;
     }
-    if (shouldTriggerCommand(textAreaRef, '#')) {
+    if (shouldTriggerContactCommand(textAreaRef)) {
       setShowContactsPopover(true);
     }
   }, [textAreaRef, hashCommandEnabled, setShowContactsPopover]);
@@ -189,11 +217,23 @@ const useHandleKeyUp = ({
         return;
       }
 
-      const firstChar = text[0];
-      const handler = commandHandlers[firstChar as keyof typeof commandHandlers];
+      if (getCommandPrefix(textAreaRef, '#') != null) {
+        handleContactsCommand();
+        return;
+      }
 
+      const cursor = textAreaRef.current?.selectionStart ?? 0;
+      const commandChar = textAreaRef.current?.value.charAt(cursor - 1);
+      const handler = commandHandlers[commandChar as keyof typeof commandHandlers];
       if (typeof handler === 'function') {
         handler();
+        return;
+      }
+
+      const firstChar = text[0];
+      const fallbackHandler = commandHandlers[firstChar as keyof typeof commandHandlers];
+      if (typeof fallbackHandler === 'function') {
+        fallbackHandler();
       }
     },
     [textAreaRef, commandHandlers, handleUpArrow],

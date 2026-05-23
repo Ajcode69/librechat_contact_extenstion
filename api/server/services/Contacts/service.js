@@ -1,6 +1,47 @@
 const { embedContactsBatch, hybridContactSearch, formatContactsContext } = require('@librechat/api');
+const mongoose = require('mongoose');
 const db = require('~/models');
 const logger = require('~/config/winston');
+
+function escapeRegExp(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+async function searchContactMentions(userId, query, options = {}) {
+  const Contact = mongoose.models.Contact;
+  const cleanQuery = (query || '').trim();
+  const limit = Math.min(parseInt(options.limit, 10) || 20, 100);
+  const baseQuery = {
+    user: new mongoose.Types.ObjectId(userId),
+    deletedAt: null,
+  };
+
+  if (!cleanQuery) {
+    return Contact.find(baseQuery).sort({ name: 1 }).limit(limit).lean();
+  }
+
+  const startsWith = new RegExp(`^${escapeRegExp(cleanQuery)}`, 'i');
+  const contains = new RegExp(escapeRegExp(cleanQuery), 'i');
+  const isNumericPrefix = /^\d+$/.test(cleanQuery);
+
+  const fields = isNumericPrefix
+    ? [
+        { 'metadata.mobile': startsWith },
+        { 'metadata.phone': startsWith },
+        { 'metadata.mobile_number': startsWith },
+        { email: startsWith },
+        { name: startsWith },
+      ]
+    : [
+        { name: startsWith },
+        { company: startsWith },
+        { email: startsWith },
+        { role: contains },
+        { searchText: contains },
+      ];
+
+  return Contact.find({ ...baseQuery, $or: fields }).sort({ name: 1 }).limit(limit).lean();
+}
 
 /**
  * Generate and persist embeddings for contacts after insert/update/import.
@@ -29,6 +70,10 @@ async function embedAndStoreContacts(contacts) {
  * Hybrid lexical + vector search for contacts.
  */
 async function searchContactsHybrid(userId, query, options = {}) {
+  if (options.field === 'mention') {
+    return searchContactMentions(userId, query, options);
+  }
+
   return hybridContactSearch(userId, query, options, {
     lexicalSearch: db.searchContacts.bind(db),
     fetchEmbeddableContacts: db.fetchEmbeddableContacts.bind(db),
