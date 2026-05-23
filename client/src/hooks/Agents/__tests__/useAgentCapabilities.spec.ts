@@ -13,6 +13,7 @@ describe('useAgentCapabilities', () => {
     expect(result.current.contextEnabled).toBe(false);
     expect(result.current.fileSearchEnabled).toBe(false);
     expect(result.current.webSearchEnabled).toBe(false);
+    expect(result.current.contactsEnabled).toBe(false);
     expect(result.current.codeEnabled).toBe(false);
     expect(result.current.deferredToolsEnabled).toBe(false);
     expect(result.current.programmaticToolsEnabled).toBe(false);
@@ -91,6 +92,7 @@ describe('useAgentCapabilities', () => {
       AgentCapabilities.context,
       AgentCapabilities.file_search,
       AgentCapabilities.web_search,
+      AgentCapabilities.contacts,
       AgentCapabilities.execute_code,
       AgentCapabilities.deferred_tools,
       AgentCapabilities.programmatic_tools,
@@ -105,6 +107,7 @@ describe('useAgentCapabilities', () => {
     expect(result.current.contextEnabled).toBe(true);
     expect(result.current.fileSearchEnabled).toBe(true);
     expect(result.current.webSearchEnabled).toBe(true);
+    expect(result.current.contactsEnabled).toBe(true);
     expect(result.current.codeEnabled).toBe(true);
     expect(result.current.deferredToolsEnabled).toBe(true);
     expect(result.current.programmaticToolsEnabled).toBe(true);

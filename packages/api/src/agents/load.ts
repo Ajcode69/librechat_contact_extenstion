@@ -72,6 +72,9 @@ export async function loadEphemeralAgent(
   if (ephemeralAgent?.web_search === true || modelSpec?.webSearch === true) {
     tools.push(Tools.web_search);
   }
+  if (ephemeralAgent?.contacts === true || modelSpec?.contacts === true) {
+    tools.push(Tools.contacts);
+  }
 
   const addedServers = new Set<string>();
   if (mcpServers.size > 0) {

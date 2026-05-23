@@ -20,6 +20,7 @@ interface BadgeRowContextType {
   webSearch: ReturnType<typeof useToolToggle>;
   artifacts: ReturnType<typeof useToolToggle>;
   fileSearch: ReturnType<typeof useToolToggle>;
+  contacts: ReturnType<typeof useToolToggle>;
   codeInterpreter: ReturnType<typeof useToolToggle>;
   searchApiKeyForm: ReturnType<typeof useSearchApiKeyForm>;
   mcpServerManager: ReturnType<typeof useMCPServerManager>;
@@ -98,12 +99,14 @@ export default function BadgeRowProvider({
       const codeToggleKey = `${LocalStorageKeys.LAST_CODE_TOGGLE_}${storageSuffix}`;
       const webSearchToggleKey = `${LocalStorageKeys.LAST_WEB_SEARCH_TOGGLE_}${storageSuffix}`;
       const fileSearchToggleKey = `${LocalStorageKeys.LAST_FILE_SEARCH_TOGGLE_}${storageSuffix}`;
+      const contactsToggleKey = `${LocalStorageKeys.LAST_CONTACTS_TOGGLE_}${storageSuffix}`;
       const artifactsToggleKey = `${LocalStorageKeys.LAST_ARTIFACTS_TOGGLE_}${storageSuffix}`;
       const skillsToggleKey = `${LocalStorageKeys.LAST_SKILLS_TOGGLE_}${storageSuffix}`;
 
       const codeToggleValue = getTimestampedValue(codeToggleKey);
       const webSearchToggleValue = getTimestampedValue(webSearchToggleKey);
       const fileSearchToggleValue = getTimestampedValue(fileSearchToggleKey);
+      const contactsToggleValue = getTimestampedValue(contactsToggleKey);
       const artifactsToggleValue = getTimestampedValue(artifactsToggleKey);
       const skillsToggleValue = getTimestampedValue(skillsToggleKey);
 
@@ -130,6 +133,14 @@ export default function BadgeRowProvider({
           initialValues[Tools.file_search] = JSON.parse(fileSearchToggleValue);
         } catch (e) {
           console.error('Failed to parse file search toggle value:', e);
+        }
+      }
+
+      if (contactsToggleValue !== null) {
+        try {
+          initialValues[Tools.contacts] = JSON.parse(contactsToggleValue);
+        } catch (e) {
+          console.error('Failed to parse contacts toggle value:', e);
         }
       }
 
@@ -232,6 +243,15 @@ export default function BadgeRowProvider({
     isAuthenticated: true,
   });
 
+  /** Contacts hook */
+  const contacts = useToolToggle({
+    conversationId,
+    storageContextKey,
+    toolKey: Tools.contacts,
+    localStorageKey: LocalStorageKeys.LAST_CONTACTS_TOGGLE_,
+    isAuthenticated: true,
+  });
+
   /** Artifacts hook - using a custom key since it's not a Tool but a capability */
   const artifacts = useToolToggle({
     conversationId,
@@ -257,6 +277,7 @@ export default function BadgeRowProvider({
     webSearch,
     artifacts,
     fileSearch,
+    contacts,
     agentsConfig,
     conversationId,
     storageContextKey,

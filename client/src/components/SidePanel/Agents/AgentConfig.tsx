@@ -35,6 +35,7 @@ import FileSearch from './FileSearch';
 import Artifacts from './Artifacts';
 import AgentTool from './AgentTool';
 import CodeForm from './Code/Form';
+import ContactsAction from './Contacts/Action';
 import MCPTools from './MCPTools';
 
 const labelClass = 'mb-2 text-token-text-primary block text-sm font-medium';
@@ -95,6 +96,7 @@ export default function AgentConfig() {
     artifactsEnabled,
     webSearchEnabled,
     fileSearchEnabled,
+    contactsEnabled,
   } = useAgentCapabilities(agentsConfig?.capabilities);
 
   const hasSkillsAccess = useHasAccess({
@@ -322,6 +324,7 @@ export default function AgentConfig() {
         </div>
         {(codeEnabled ||
           fileSearchEnabled ||
+          contactsEnabled ||
           artifactsEnabled ||
           contextEnabled ||
           webSearchEnabled) && (
@@ -339,6 +342,8 @@ export default function AgentConfig() {
             {artifactsEnabled && <Artifacts />}
             {/* File Search */}
             {fileSearchEnabled && <FileSearch agent_id={agent_id} files={knowledge_files} />}
+            {/* Contacts */}
+            {contactsEnabled && <ContactsAction />}
           </div>
         )}
         {/* MCP Section */}

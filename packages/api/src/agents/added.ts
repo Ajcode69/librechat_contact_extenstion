@@ -68,6 +68,7 @@ export async function loadAddedAgent(
       execute_code?: boolean;
       file_search?: boolean;
       web_search?: boolean;
+      contacts?: boolean;
       artifacts?: unknown;
     };
     [key: string]: unknown;
@@ -121,6 +122,7 @@ export async function loadAddedAgent(
         execute_code?: boolean;
         file_search?: boolean;
         web_search?: boolean;
+        contacts?: boolean;
         artifacts?: unknown;
       }
     | undefined;
@@ -136,6 +138,7 @@ export async function loadAddedAgent(
         executeCode?: boolean;
         fileSearch?: boolean;
         webSearch?: boolean;
+        contacts?: boolean;
       }>;
     }
   )?.list;
@@ -158,6 +161,9 @@ export async function loadAddedAgent(
   }
   if (ephemeralAgent?.web_search === true || modelSpec?.webSearch === true) {
     tools.push(Tools.web_search);
+  }
+  if (ephemeralAgent?.contacts === true || modelSpec?.contacts === true) {
+    tools.push(Tools.contacts);
   }
 
   const addedServers = new Set<string>();

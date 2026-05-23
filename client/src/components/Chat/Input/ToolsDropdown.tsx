@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useCallback } from 'react';
 import * as Ariakit from '@ariakit/react';
 import { TooltipAnchor, DropdownPopup, PinIcon, VectorIcon } from '@librechat/client';
-import { Globe, ScrollText, Settings, Settings2, TerminalSquareIcon } from 'lucide-react';
+import { Globe, ScrollText, Settings, Settings2, TerminalSquareIcon, Users } from 'lucide-react';
 import type { MenuItemProps } from '~/common';
 import {
   AuthType,
@@ -26,7 +26,7 @@ const ToolsDropdown = ({ disabled }: ToolsDropdownProps) => {
   const context = useBadgeRowContext();
   const { data: startupConfig } = useGetStartupConfig();
 
-  const { codeEnabled, webSearchEnabled, artifactsEnabled, fileSearchEnabled, skillsEnabled } =
+  const { codeEnabled, webSearchEnabled, artifactsEnabled, fileSearchEnabled, skillsEnabled, contactsEnabled } =
     useAgentCapabilities(context?.agentsConfig?.capabilities ?? defaultAgentCapabilities);
 
   const canUseWebSearch = useHasAccess({
@@ -61,6 +61,7 @@ const ToolsDropdown = ({ disabled }: ToolsDropdownProps) => {
     webSearch,
     artifacts,
     fileSearch,
+    contacts,
     mcpServerManager,
     codeInterpreter,
     searchApiKeyForm,
@@ -75,6 +76,7 @@ const ToolsDropdown = ({ disabled }: ToolsDropdownProps) => {
   } = webSearch ?? {};
   const { isPinned: isCodePinned, setIsPinned: setIsCodePinned } = codeInterpreter ?? {};
   const { isPinned: isFileSearchPinned, setIsPinned: setIsFileSearchPinned } = fileSearch ?? {};
+  const { isPinned: isContactsPinned, setIsPinned: setIsContactsPinned } = contacts ?? {};
   const { isPinned: isArtifactsPinned, setIsPinned: setIsArtifactsPinned } = artifacts ?? {};
   const { isPinned: isSkillsPinned, setIsPinned: setIsSkillsPinned } = skills ?? {};
 
@@ -98,6 +100,11 @@ const ToolsDropdown = ({ disabled }: ToolsDropdownProps) => {
     const newValue = !fileSearch?.toggleState;
     fileSearch?.debouncedChange({ value: newValue });
   }, [fileSearch]);
+
+  const handleContactsToggle = useCallback(() => {
+    const newValue = !contacts?.toggleState;
+    contacts?.debouncedChange({ value: newValue });
+  }, [contacts]);
 
   const handleArtifactsToggle = useCallback(() => {
     const currentState = artifacts?.toggleState;
@@ -160,6 +167,38 @@ const ToolsDropdown = ({ disabled }: ToolsDropdownProps) => {
           >
             <div className="h-4 w-4">
               <PinIcon unpin={isFileSearchPinned} />
+            </div>
+          </button>
+        </div>
+      ),
+    });
+  }
+
+  if (contactsEnabled) {
+    dropdownItems.push({
+      onClick: handleContactsToggle,
+      hideOnClick: false,
+      render: (props) => (
+        <div {...props}>
+          <div className="flex items-center gap-2">
+            <Users className="icon-md" aria-hidden="true" />
+            <span>{localize('com_ui_contacts')}</span>
+          </div>
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              setIsContactsPinned?.(!isContactsPinned);
+            }}
+            className={cn(
+              'rounded p-1 transition-all duration-200',
+              'hover:bg-surface-secondary hover:shadow-sm',
+              !isContactsPinned && 'text-text-secondary hover:text-text-primary',
+            )}
+            aria-label={isContactsPinned ? 'Unpin' : 'Pin'}
+          >
+            <div className="h-4 w-4">
+              <PinIcon unpin={isContactsPinned} />
             </div>
           </button>
         </div>

@@ -561,6 +561,9 @@ async function loadToolDefinitionsWrapper({ req, res, agent, streamId = null, to
     if (tool === Tools.web_search) {
       return checkCapability(AgentCapabilities.web_search);
     }
+    if (tool === Tools.contacts) {
+      return checkCapability(AgentCapabilities.contacts);
+    }
     if (isActionTool(tool)) {
       return actionsEnabled;
     }
@@ -940,6 +943,7 @@ async function loadAgentTools({
         AgentCapabilities.file_search,
         AgentCapabilities.execute_code,
         AgentCapabilities.web_search,
+        AgentCapabilities.contacts,
       ].includes(capability);
       const suffix = isToolCapability ? ' despite configured tool.' : '.';
       logger.warn(
@@ -960,6 +964,8 @@ async function loadAgentTools({
     } else if (tool === Tools.web_search) {
       includesWebSearch = checkCapability(AgentCapabilities.web_search);
       return includesWebSearch;
+    } else if (tool === Tools.contacts) {
+      return checkCapability(AgentCapabilities.contacts);
     } else if (isActionTool(tool)) {
       return actionsEnabled;
     } else if (!areToolsEnabled) {

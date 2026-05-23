@@ -9,6 +9,7 @@ interface AgentCapabilitiesResult {
   contextEnabled: boolean;
   fileSearchEnabled: boolean;
   webSearchEnabled: boolean;
+  contactsEnabled: boolean;
   codeEnabled: boolean;
   skillsEnabled: boolean;
   deferredToolsEnabled: boolean;
@@ -53,6 +54,11 @@ export default function useAgentCapabilities(
     [capabilities],
   );
 
+  const contactsEnabled = useMemo(
+    () => capabilities?.includes(AgentCapabilities.contacts) ?? false,
+    [capabilities],
+  );
+
   const codeEnabled = useMemo(
     () => capabilities?.includes(AgentCapabilities.execute_code) ?? false,
     [capabilities],
@@ -82,6 +88,7 @@ export default function useAgentCapabilities(
     contextEnabled,
     artifactsEnabled,
     webSearchEnabled,
+    contactsEnabled,
     fileSearchEnabled,
     deferredToolsEnabled,
     programmaticToolsEnabled,

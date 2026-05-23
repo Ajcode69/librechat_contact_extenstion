@@ -15,6 +15,7 @@ const TIMESTAMPED_KEYS = [
   LocalStorageKeys.LAST_CODE_TOGGLE_,
   LocalStorageKeys.LAST_WEB_SEARCH_TOGGLE_,
   LocalStorageKeys.LAST_FILE_SEARCH_TOGGLE_,
+  LocalStorageKeys.LAST_CONTACTS_TOGGLE_,
   LocalStorageKeys.LAST_ARTIFACTS_TOGGLE_,
   LocalStorageKeys.PIN_MCP_,
 ];
